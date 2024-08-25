@@ -3,7 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\Category;
+use Illuminate\Support\Str;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class CategoryController extends Controller
 {
@@ -12,8 +15,11 @@ class CategoryController extends Controller
      */
     public function index()
     {
-        //
-    }
+        $categories = Category::all();
+        return view('admin.categories.index', [
+            'categories' => $categories 
+        ]);
+    }   
 
     /**
      * Show the form for creating a new resource.
@@ -21,6 +27,7 @@ class CategoryController extends Controller
     public function create()
     {
         //
+        return view('admin.categories.create');
     }
 
     /**
@@ -28,7 +35,36 @@ class CategoryController extends Controller
      */
     public function store(Request $request)
     {
-        //
+        // untuk validasi
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'icon' => 'required|image|mimes:png,jpg,svg',
+        ]);
+
+        // open DB transaksi terbaru
+        DB::beginTransaction();
+
+        // try => persiapan data
+        try {
+            if ($request->hasFile('icon')) {
+                $iconPath = $request->file('icon')->store('category_icons', 'public');
+                $validated['icon'] = $iconPath;
+            }
+            $validated['slug'] = Str::slug($request->name);
+            // Obat Batuk -> slug : obat-batuk
+            $newCategory = Category::create($validated);
+
+            // commit 
+            DB::commit();
+            
+            return redirect()->route('admin.categories.index');
+        } catch (\Exception $e) {
+            DB::rollback();
+            $error = ValidationException::withMessages([
+                'system_error' => ['System error' . $e->getMessage()],
+            ]);
+            throw $error;
+        }
     }
 
     /**
